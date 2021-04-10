@@ -1,0 +1,122 @@
+---
+# Create Prefixes
+- name: Create IPv4 Interconnect Prefixes
+  netbox_prefix:
+    netbox_url: "{{ netbox_url }}"
+    netbox_token: "{{ netbox_token }}"
+    data:
+      parent: "{{ parent_ipv4_prefix }}"
+      family: 4
+      site: "{{ site_name }}"
+      prefix_length: "{{ ipv4_prefix_length }}"
+      prefix_role: "{{ interconnect.prefix_role }}"
+      is_pool: False
+    state: present
+    first_available: True
+  register: v4_prefix
+
+- name: Create IPv6 Interconnect Prefixes
+  netbox_prefix:
+    netbox_url: "{{ netbox_url }}"
+    netbox_token: "{{ netbox_token }}"
+    data:
+      parent: "{{ parent_ipv6_prefix }}"
+      family: 6
+      site: "{{ site_name }}"
+      prefix_length: "{{ ipv6_prefix_length }}"
+      prefix_role: "{{ interconnect.prefix_role }}"
+      is_pool: False
+    state: present
+    first_available: True
+  register: v6_prefix
+
+# Create Interface if it doesn't exist
+- name: Create Interfaces
+  netbox_device_interface:
+    netbox_url: "{{ netbox_url }}"
+    netbox_token: "{{ netbox_token }}"
+    data:
+      device: "{{ interface.device }}"
+      name: "GigabitEthernet{{ interface.intf_number }}"  # Come back and fix for different interface types
+      type: "{{ interconnect.type }}"
+      enabled: True
+    state: present
+  loop: "{{ interconnect.device_interfaces }}"
+  loop_control:
+    loop_var: interface
+  register: int
+
+# Add IP addresses to Interfaces
+- name: Attach IPv4 Address to Interface
+  netbox_ip_address:
+    netbox_url: "{{ netbox_url }}"
+    netbox_token: "{{ netbox_token }}"
+    data:
+      prefix: "{{ v4_prefix.prefix.prefix }}"
+      assigned_object:
+        device: "{{ interface.device }}"
+        name: "GigabitEthernet{{ interface.intf_number }}"  # Come back and fix for different interface types
+    state: new
+  loop: "{{ interconnect.device_interfaces }}"
+  loop_control:
+    loop_var: interface
+  register: ipv4
+
+- name: Attach IPv6 Address to Interface
+  netbox_ip_address:
+    netbox_url: "{{ netbox_url }}"
+    netbox_token: "{{ netbox_token }}"
+    data:
+      prefix: "{{ v6_prefix.prefix.prefix }}"
+      assigned_object:
+        device: "{{ interface.device }}"
+        name: "GigabitEthernet{{ interface.intf_number }}"  # Come back and fix for different interface types
+    state: new
+  loop: "{{ interconnect.device_interfaces }}"
+  loop_control:
+    loop_var: interface
+  register: ipv6
+
+# Create Interconnect in Netbox
+- name: Create Cable
+  netbox_cable:
+    netbox_url: "{{ netbox_url }}"
+    netbox_token: "{{ netbox_token }}"
+    data:
+      termination_a_type: dcim.interface
+      termination_a:
+        device: "{{ interconnect.device_interfaces[0].device }}"
+        name: "GigabitEthernet{{ interconnect.device_interfaces[0].intf_number }}"  # Come back and fix for different interface types
+      termination_b_type: dcim.interface
+      termination_b:
+        device: "{{ interconnect.device_interfaces[1].device }}"
+        name: "GigabitEthernet{{ interconnect.device_interfaces[1].intf_number }}"  # Come back and fix for different interface types
+      type: cat6
+      status: connected
+      label: "{{ interconnect.name }}"
+    state: present
+
+# Configure Interconnect in NSO to push to actual NEs
+- name: Push interconnect config to NSO for deployment
+  nso_config:
+    url: "{{ nso_url }}"
+    username: "{{ nso_username }}"
+    password: "{{ nso_password }}"
+    data:
+      interconnect:interconnect:
+      - name: "{{ interconnect.name }}"
+        device-interfaces:
+        - device: "{{ interconnect.device_interfaces[0].device }}"
+          intf-number: "{{ interconnect.device_interfaces[0].intf_number }}"
+          description: "to {{ interconnect.device_interfaces[1].device }} - GE {{ interconnect.device_interfaces[1].intf_number }}" 
+          ipv4_address: "{{ ipv4.results[0].ip_address.address[:-3] }}"
+          ipv4_mask: "{{ ipv4_prefix_mask }}"
+          ipv6_address: "{{ ipv6.results[0].ip_address.address[:-4] }}"
+          ipv6_length: "{{ ipv6_prefix_length }}"
+        - device: "{{ interconnect.device_interfaces[1].device }}"
+          intf-number: "{{ interconnect.device_interfaces[1].intf_number }}"
+          description: "to {{ interconnect.device_interfaces[0].device }} - GE {{ interconnect.device_interfaces[0].intf_number }}"
+          ipv4_address: "{{ ipv4.results[1].ip_address.address[:-3] }}"
+          ipv4_mask: "{{ ipv4_prefix_mask }}"
+          ipv6_address: "{{ ipv6.results[1].ip_address.address[:-4] }}"
+          ipv6_length: "{{ ipv6_prefix_length }}"

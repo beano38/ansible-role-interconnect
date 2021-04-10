@@ -1,0 +1,27 @@
+---
+# defaults file for interconnect
+netbox_url: http://127.0.0.1:8000
+netbox_token: 0123456789abcdef0123456789abcdef01234567
+
+nso_url: http://127.0.0.1:8080/jsonrpc
+nso_username: admin
+nso_password: admin
+
+site_name: site
+
+interconnect:
+  name: P01-PE01
+  prefix_role: core-interconnects
+  type: 1000BASE-T (1GE)
+  device_interfaces:
+  - device: P01-XR9KV
+    intf_number: 0/0/0/0
+  - device: PE01-XR9KV
+    intf_number: 0/0/0/0
+
+parent_ipv4_prefix: 172.16.0.128/25
+parent_ipv6_prefix: fd00:0:0:1::/64
+
+ipv4_prefix_length: 30
+ipv4_prefix_mask: 255.255.255.0
+ipv6_prefix_length: 126
