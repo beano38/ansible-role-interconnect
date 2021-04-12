@@ -40,7 +40,7 @@ parent_ipv4_prefix: 172.16.0.128/25
 parent_ipv6_prefix: fd00:0:0:1::/64
 
 ipv4_prefix_length: 30
-ipv4_prefix_mask: 255.255.255.0
+ipv4_prefix_mask: 255.255.255.252
 ipv6_prefix_length: 126
 ```
 
